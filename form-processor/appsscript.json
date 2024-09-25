@@ -1,0 +1,15 @@
+{
+  "timeZone": "America/New_York",
+  "dependencies": {
+    "libraries": [
+      {
+        "userSymbol": "SHL",
+        "version": "10",
+        "libraryId": "1Zvt2EMkXycPEi6Kbpi8bCm3uHVxFOHuyj2_NmyS53Uo_1IakSjAQfhDA",
+        "developmentMode": false
+      }
+    ]
+  },
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8"
+}

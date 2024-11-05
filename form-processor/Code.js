@@ -202,6 +202,7 @@ function processResponse (r, processedData=undefined) {
     if (responseMap['Email']) {
       rawEmail = responseMap['Email'][0]
     }
+    let rawName = responseMap['Name'][0];
     let rawAsset = responseMap['Asset Tag'][0];
     let atStudentUser = lookupStudentUser(rawEmail);
     let atStudentScheduleInfo = atStudentUser ? lookupStudentScheduleInfo(atStudentUser) : {};
@@ -218,7 +219,8 @@ function processResponse (r, processedData=undefined) {
       ...responseMap,
       id : r.getId(),
       timestamp,
-      FormUser : formUser,
+      FormName : rawName,
+      SubmittedBy : formUser,
       FormEmail : rawEmail,
       FormAsset : rawAsset,    
       Description: processDescription(responseMap),
@@ -234,6 +236,7 @@ function processResponse (r, processedData=undefined) {
     }
     newRecord.Grade = getSchool(newRecord.YOG);
     // Push to spreadsheet
+    console.log('Pushing record to sheet:',newRecord);
     processedData.pushRow(newRecord);
     // Maybe chat?
     sendToChat(newRecord);
@@ -346,11 +349,11 @@ function sendToChat (record) {
     let title = `New Chromebook Ticket - Priority ${priorities[record.UrgentCode]}`
     let user = fixEmail(record.FormEmail);
     let extraRows = [];
-    if (record.FormEmail != record.FormUser) {
-      user += ' (submitted by '+record.FormUser+')'
+    if (record.FormEmail != record.SubmittedBy) {
+      user += ' (submitted by '+record.SubmittedBy+')'
     }
-    if (record.Name) {
-      user += '\n' + record.Name
+    if (record.FormName) {
+      extraRows.push('Name: '+record.FormName);
     }
     if (record.Grade) {
       extraRows.push(record.Grade);
@@ -391,6 +394,10 @@ function sendToChat (record) {
     }
     extraRows.push(`<b>Problem:</b> ${record.Problem}\n<b>Description:</b> ${record.Description}`);   
     extraRows.push(getEmailForRow(record)); 
+    if (record.FormName != record.Name) {
+      extraRows.push('Name in form: '+record.FormName)
+      extraRows.push('vs. Name via email: '+record.Name);
+    }
     extraRows.push(
       `<a href="${record.Edit}">Edit this response</a> (will push it onto the list again)`
     )
@@ -443,7 +450,7 @@ function fixEmail (email) {
 function lookupStaffUser (email) {
   email = fixEmail(email);
 
-let records = listRecords(StaffEndpoint, ['Full Name','Role','School (Short)','Email','Asset Tag'],filterByFormula=`LOWER(Email)=LOWER("${email}")`);
+  let records = listRecords(StaffEndpoint, ['Full Name','Role','School (Short)','Email','Asset Tag'],filterByFormula=`LOWER(Email)=LOWER("${email}")`);
   console.log('record:',records);
   if (records && records.length) {
     let theRecord = records[0].fields;

@@ -137,47 +137,6 @@ function processDescription(responseMap) {
   return descriptions.join('\n');
 }
 
-let schedData = null;
-
-function getSchedData() {
-  if (schedData) {
-    return schedData;
-  } else {
-    sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('StudentSchedules');
-    LASID = 0; ADV = 1; FREE = 2;
-    let data = sheet.getDataRange().getValues();
-    let headers = data[0];
-    console.info('LASID header:', headers[0], 'ADV:', headers[1], 'Free:', headers[2]);
-    schedData = {};
-    for (let rn = 1; rn < data.length; rn++) {
-      let row = data[rn];
-      let key = row[LASID];
-      let adv = row[ADV];
-      let free = row[FREE];
-      schedData[key] = { adv, free }
-    }
-  }
-  return schedData;
-}
-function testGetSchedData() {
-  let d = getSchedData();
-  console.log('Got schedule data e.g.', d[2689]);
-  console.log(schedData);
-}
-
-function lookupStudentScheduleInfo({ LASID }) {
-  if (!LASID) {
-    return {};
-  } else {
-    let scheduleLookup = getSchedData();
-    let scheduleInfo = scheduleLookup[LASID];
-    if (!scheduleInfo) {
-      scheduleInfo = scheduleLookup[Number(LASID)];
-    }
-    return scheduleInfo || {};
-  }
-}
-
 /**
  * Processes a form response.
  * @param {GoogleAppsScript.Forms.FormResponse} r - The form response to process.
@@ -239,6 +198,38 @@ function processResponseSheetsLegacy(r, processedData = undefined) {
   }
 }
 
+// Restored helper (previously adjacent to image constants) for asset links
+function formatAssetLink(assetTag) {
+  if (Array.isArray(assetTag)) {
+    assetTag = assetTag.join(' ');
+  }
+  if (assetTag.trim().includes(' ')) {
+    return assetTag; // ignore e.g. "Personal Machine";
+  } else {
+    return `<a href="https://cb.innovationcharter.org/asset/${assetTag}">${assetTag}</a>`
+  }
+}
+
+// Restored helper for computing school / grade from YOG
+function getSchool(YOG) {
+  if (!YOG) { return ""; }
+  YOG = Number(YOG);
+  let currentDate = new Date();
+  let currentYear = currentDate.getFullYear();
+  let currentMonth = currentDate.getMonth();
+  let seniorYOG = currentMonth >= 6 ? currentYear + 1 : currentYear;
+  let grade = seniorYOG - YOG + 12;
+  let school;
+  if (grade >= 9) {
+    school = 'HS';
+  } else if (grade >= 5 && grade <= 8) {
+    school = 'MS';
+  } else {
+    school = "?";
+  }
+  return `${school} (${grade}th, '${YOG.toString().slice(2)})`;
+}
+
 function fillDropdownInColumnCFromRow2() {
   // Get the active sheet
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Processed Responses");
@@ -263,82 +254,6 @@ function fillDropdownInColumnCFromRow2() {
   }
 }
 
-let imageBase = 'https://github.com/thinkle-iacs/chromebook-ticket-system/blob/main/icons/'
-let imageSuffix = '?raw=true'
-let images = {
-  'screen': 'screen.png',
-  'wet': 'wet.png',
-  "won't turn on": 'no-on.png',
-  'printer': 'printer.png',
-  'keys': 'keyboard.png',
-  "log-in": 'log-in.png',
-  "camera and/or microphone": 'no-mic.png',
-  'frame': 'frame.png',
-}
-
-function formatAssetLink(assetTag) {
-  if (Array.isArray(assetTag)) {
-    assetTag = assetTag.join(' ');
-  }
-  if (assetTag.trim().includes(' ')) {
-    return assetTag; // ignore e.g. "Personal Machine";
-  } else {
-    return `<a href="https://cb.innovationcharter.org/asset/${assetTag}">${assetTag}</a>`
-  }
-}
-
-function getSchool(YOG) {
-  if (!YOG) {
-    return "";
-  }
-  YOG = Number(YOG); // Ensure YOG is a number
-  let currentDate = new Date();
-  let currentYear = currentDate.getFullYear();
-  let currentMonth = currentDate.getMonth(); // 0 = January, 11 = December
-
-  // If it's July or later, seniors are graduating NEXT year
-  // Otherwise, they're graduating this year
-  let seniorYOG = currentMonth >= 6 ? currentYear + 1 : currentYear;
-
-  // Calculate grade level
-  let grade = seniorYOG - YOG + 12;
-
-  let school;
-  if (grade >= 9) {
-    school = 'HS';
-  } else if (grade >= 5 && grade <= 8) {
-    school = 'MS';
-  } else {
-    school = "?";
-  }
-
-  // Return school name with grade and YOG in parentheses
-  return `${school} (${grade}th, '${YOG.toString().slice(2)})`;
-}
-
-function testGetSchool() {
-  for (let YOG of ['2025', '2030', '2032', '2027', '2026']) {
-    console.log(`${YOG} => ${getSchool(YOG)}`);
-  }
-}
-
-function getEmailForRow(record) {
-  let links = '';
-  let email = fixEmail(record.FormEmail);
-  if (email) {
-    links += `<a href="mailto:${email}">Email user</a>`;
-  }
-  if (record.AdvisorEmails) {
-    let advisorEmails = fixEmail(record.AdvisorEmails);
-    links += `\n<a href="mailto:${email},${advisorEmails}">Email user + advisor</a>`;
-    if (record.Contacts) {
-      let contactEmails = record.Contacts;
-      links += `\n<a href="mailto:${email},${advisorEmails},${contactEmails}">Email user + advisor + family</a>`;
-    }
-  }
-  return links;
-}
-
 function sendToChat(record) {
   if (record.UrgentCode >= 1) {
     let priorities = ['None', 'Low (Usable)', 'Medium (Semi-Usable)', 'High (Unusable)'];
@@ -354,7 +269,6 @@ function sendToChat(record) {
     if (record.Grade) {
       extraRows.push(record.Grade);
     }
-    //['LASID','Name','YOG','Advisor','Email','Asset Tag','Contact1Email','Contact2Email'],
     if (record.Advisor) {
       user += ` (Advisor: ${record.Advisor})`;
     }
@@ -401,7 +315,7 @@ function sendToChat(record) {
       `Manage this ticket in <a href="${SPREADSHEET_URL}">the ticket spreadsheet.</a>`
     )
     let image = undefined;
-    if (images[record.Problem]) {
+    if (typeof images !== 'undefined' && images[record.Problem]) {
       image = `${imageBase}${images[record.Problem]}${imageSuffix}`
       console.log('Image is:', image)
     }
@@ -410,6 +324,29 @@ function sendToChat(record) {
       title, user, extraRows, image
     )
   }
+}
+
+function testGetSchool() {
+  for (let YOG of ['2025', '2030', '2032', '2027', '2026']) {
+    console.log(`${YOG} => ${getSchool(YOG)}`);
+  }
+}
+
+function getEmailForRow(record) {
+  let links = '';
+  let email = fixEmail(record.FormEmail);
+  if (email) {
+    links += `<a href="mailto:${email}">Email user</a>`;
+  }
+  if (record.AdvisorEmails) {
+    let advisorEmails = fixEmail(record.AdvisorEmails);
+    links += `\n<a href="mailto:${email},${advisorEmails}">Email user + advisor</a>`;
+    if (record.Contacts) {
+      let contactEmails = record.Contacts;
+      links += `\n<a href="mailto:${email},${advisorEmails},${contactEmails}">Email user + advisor + family</a>`;
+    }
+  }
+  return links;
 }
 
 function testFixEmail() {
@@ -504,8 +441,11 @@ function lookupStudentUser(email) {
 }
 function onFormSubmit(e) {
   let r = e.response;
-  // Legacy for now; switch to new processResponse after validation
+  // New Airtable-first processing
+  processResponse(r);
+  /* Legacy fallback:
   processResponseSheetsLegacy(r);
+  */
 }
 
 /**
@@ -524,6 +464,8 @@ function processResponse(r) {
   const description = buildUserDescription(responseMap);
   if (shouldSkipTicket(responseMap)) {
     console.log('Skipping ticket per rules (FormID)', formID);
+    // Still mark as processed so we do not repeatedly reconsider it.
+    markProcessedInSheet(r, responseMap, description, 0, null);
     return;
   }
   const priority = computePriority(responseMap['Computer Status'], description);
@@ -539,6 +481,8 @@ function processResponse(r) {
   };
   let rec = upsertTicket(ticketFields);
   let number = rec.fields['Number'];
+  // Mark in legacy sheet for recovery tracking
+  markProcessedInSheet(r, responseMap, description, priority, number);
   sendTicketChat({
     number,
     priority,
@@ -550,32 +494,73 @@ function processResponse(r) {
   });
 }
 
+// New lightweight chat notification for Airtable-first flow (with image)
+function sendTicketChat(opts) {
+  const { number, priority, formName, rawEmail, submittedBy, formAsset, description } = opts;
+  const title = `New Ticket #${number} (P${priority})`;
+  let user = fixEmail(rawEmail || submittedBy || '');
+  if (rawEmail && submittedBy && rawEmail !== submittedBy) {
+    user += ` (submitted by ${submittedBy})`;
+  }
+  const rows = [];
+  if (formName) rows.push('Name: ' + formName);
+  if (formAsset) rows.push('Asset: ' + formAsset);
+  rows.push('<b>Description:</b> ' + (description || '(none)'));
+  // Primary app link (replace placeholder path if different)
+  const appUrl = buildTicketAppUrl(number);
+  rows.push(`<a href="${appUrl}">Open in Ticket App</a>`);
+  /* // Optional legacy sheet link (only if global defined)
+  if (typeof SPREADSHEET_URL !== 'undefined') {
+    rows.push(`<a href="${SPREADSHEET_URL}">Legacy Sheet</a>`);
+  } */
+  let firstLine = (description || '').split(/\n/)[0];
+  let image = pickTicketImageForNewFlow(firstLine, description);
+  sendCardMessageToGoogleChat(title, user, rows, image);
+}
+
+function buildTicketAppUrl(number) {
+  // Adjust the path pattern if your production app differs
+  const BASE = (typeof TICKET_APP_BASE !== 'undefined') ? TICKET_APP_BASE : 'https://cb.innovationcharter.org';
+  return `${BASE}/ticket/${number}`;
+}
+
 /**
- * Send simplified chat card for new ticket.
+ * Mark a response as processed in the legacy sheet, for recovery and tracking.
+ * @param {GoogleAppsScript.Forms.FormResponse} r - The form response.
+ * @param {Object} responseMap - The response map.
+ * @param {string} description - The user description.
+ * @param {number} priority - The computed priority.
+ * @param {string} number - The ticket number.
  */
-function sendTicketChat({ number, priority, formName, rawEmail, submittedBy, formAsset, description }) {
+function markProcessedInSheet(r, responseMap, description, priority, number) {
   try {
-    let title = `New Ticket #${number} (Priority ${priority})`;
-    let subtitle = fixEmail(rawEmail || submittedBy || '');
-    if (rawEmail && submittedBy && rawEmail !== submittedBy) {
-      subtitle += ` (submitted by ${submittedBy})`;
+    const processedData = getProcessedData();
+    const formID = r.getId();
+    if (processedData.getRow(formID)) {
+      // Already marked
+      return;
     }
-    let rows = [];
-    if (formName) rows.push(`Name: ${formName}`);
-    if (formAsset) rows.push(`Asset: ${formAsset}`);
-    rows.push(`Priority: ${priority}`);
-    // Truncate very long descriptions
-    let desc = description || '';
-    if (desc.length > 1200) {
-      desc = desc.slice(0, 1200) + '\n...[truncated]';
-    }
-    rows.push(`<b>Description:</b> ${desc.replace(/\n/g, '<br>')}`);
-    rows.push(`<a href="https://cb.innovationcharter.org/ticket/number/${number}">Open Ticket #${number}</a>`);
-    sendCardMessageToGoogleChat(title, subtitle, rows);
+    const stampDate = new Date(r.getTimestamp());
+    const timestamp = stampDate.toLocaleDateString() + ' ' + stampDate.toLocaleTimeString();
+    const rawEmail = (responseMap['Email Address'] && responseMap['Email Address'][0]) || '';
+    const formName = (responseMap['Name'] && responseMap['Name'][0]) || '';
+    const formAsset = (responseMap['Asset Tag'] && responseMap['Asset Tag'][0]) || '';
+    processedData.pushRow({
+      id: formID,
+      timestamp,
+      FormEmail: rawEmail,
+      FormName: formName,
+      FormAsset: formAsset,
+      'User Description': description,
+      Priority: priority,
+      TicketNumber: number,
+      ProcessedVia: 'airtable-v1'
+    });
   } catch (err) {
-    console.error('Error sending ticket chat', err);
+    console.warn('Could not mark processed in sheet (non-fatal)', err);
   }
 }
+
 
 /** Test: process the last form response with new Airtable flow */
 function testProcessLastFormResponse() {

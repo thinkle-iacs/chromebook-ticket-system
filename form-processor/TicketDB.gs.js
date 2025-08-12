@@ -97,6 +97,12 @@ function buildUserDescription(responseMap) {
   if (appt) {
     parts.push('Appointment Notes:\n' + (Array.isArray(appt) ? appt.join('\n') : appt));
   }
+  // Append form-entered Name (so it's preserved even if email is malformed)
+  const nameArr = responseMap['Name'];
+  if (nameArr && nameArr.length && nameArr[0]) {
+    parts.push(`Form Name:\n${nameArr[0]}`);
+  }
+
   return parts.join('\n\n');
 }
 

@@ -514,14 +514,13 @@ function sendTicketChat(opts) {
     rows.push(`<a href="${SPREADSHEET_URL}">Legacy Sheet</a>`);
   } */
   let firstLine = (description || '').split(/\n/)[0];
-  let image = pickTicketImageForNewFlow(firstLine, description);
-  sendCardMessageToGoogleChat(title, user, rows, image);
+  sendCardMessageToGoogleChat(title, user, rows);
 }
 
 function buildTicketAppUrl(number) {
   // Adjust the path pattern if your production app differs
   const BASE = (typeof TICKET_APP_BASE !== 'undefined') ? TICKET_APP_BASE : 'https://cb.innovationcharter.org';
-  return `${BASE}/ticket/${number}`;
+  return `${BASE}/ticket/number/${number}`;
 }
 
 /**
